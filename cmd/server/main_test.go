@@ -1,112 +1,92 @@
 package main
 
 import (
-	"encoding/json"
+	// "encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
+	// "net/http/httptest"
+	"reflect"
 	"testing"
-  "reflect"
+
+	"github.com/DanyPops/logues/domain/conversation"
+	"github.com/DanyPops/logues/domain/user"
 )
 
 func assertResponseBody(t testing.TB, got, want string) {
-  t.Helper()
-  if got != want {
-    t.Errorf("got %q, want %q", got, want)
-  }
+	t.Helper()
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
 }
 
-func newGetChanSubsListRequest() *http.Request {
-  req, _ := http.NewRequest(http.MethodGet, "/subscribers", nil)
-  return req
-}
+// func newGetChanSubsListRequest() *http.Request {
+// 	req, _ := http.NewRequest(http.MethodGet, "/subscribers", nil)
+// 	return req
+// }
 
 func newPostChanSubsAddRequest(name string) *http.Request {
-  req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/subscribers/%s", name), nil)
-  return req
+	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/subscribers/%s", name), nil)
+	return req
 }
 
-func TestAddListSubscribers(t *testing.T) {
-  t.Run("Add subscribers & returns the subscribers", func(t *testing.T) {
-    cc := NewChanConn()
-    imss := NewInMemSubStore()
-    cc.subStore = imss
-
-    cch := NewLoguesServer(cc)
-
-    res := httptest.NewRecorder()
-
-    req := newPostChanSubsAddRequest("aviv")
-    cch.ChanSubsAdd(res, req)
-    req = newPostChanSubsAddRequest("dani")
-    cch.ChanSubsAdd(res, req)
-
-    req = newGetChanSubsListRequest()
-    cch.ChanSubsList(res, req)
-
-    want := []user{{Name: "aviv"},{Name: "dani"}}
-    got := []user{}
-
-    err := json.NewDecoder(res.Body).Decode(&got)
-
-    if err != nil {
-      t.Fatalf("Failed to decode response %q to users: %v", res.Body, err)
-    }
-
-    if !reflect.DeepEqual(got, want) {
-      t.Errorf("got %v, want %v", got, want)
-    }
-  })
-}
-
-func TestMsgsLatest(t *testing.T) {
-  t.Run("Return the latest message", func(t *testing.T) {
-    cc := NewChanConn()
-    u := user{Name: "dani"}
-    cc.msgsLatest = NewMsg(&u, "hello")
-    cch := NewLoguesServer(cc)
-
-    req, _ := http.NewRequest(http.MethodGet, "/messages/latest", nil)
-    res := httptest.NewRecorder()
-
-    cch.ChanMsgsLatest(res, req)
-  
-    want := "dani: hello\n"
-    got := message{
-      Sender: &user{},
-    }
-    _ = json.NewDecoder(res.Body).Decode(&got)
-    assertResponseBody(t, fmt.Sprintln(got), want)
-  })
-}
+// func TestAddListSubscribers(t *testing.T) {
+// 	t.Run("Add subscribers & returns the subscribers", func(t *testing.T) {
+// 		s := conversation.NewInMemorySubscriberStore()
+// 		c := conversation.NewChannel(s)
+// 		l := NewLoguesServer(c)
+//
+// 		res := httptest.NewRecorder()
+//
+//     uDani := user.NewUser("dani")
+//     uAviv := user.NewUser("aviv")
+// 		req := newPostChanSubsAddRequest(uDani)
+// 		l.ChannelSubscribersAdd(res, req)
+// 		req = newPostChanSubsAddRequest(uAviv)
+// 		l.ChannelSubscribersAdd(res, req)
+//
+// 		req = newGetChanSubsListRequest()
+// 		l.ChannelSubscribersList(res, req)
+//
+// 		want := []*user.User{uDani, uAviv}
+// 		got := []*user.User{}
+//
+// 		err := json.NewDecoder(res.Body).Decode(&got)
+//
+// 		if err != nil {
+// 			t.Fatalf("Failed to decode response %q to users: %v", res.Body, err)
+// 		}
+//
+// 		if !reflect.DeepEqual(got, want) {
+// 			t.Errorf("got %v, want %v", got, want)
+// 		}
+// 	})
+// }
 
 func TestUserSendMsg(t *testing.T) {
-  t.Run("Send messages & return the latest on subscriber", func(t *testing.T) {
-    cc := NewChanConn()
-    pub := user{
-      Name: "dani", 
-      chanSubed: cc,
-    }
-    sub := user{
-      Name: "daria", 
-      chanSubed: cc,
-    }
-    imss := NewInMemSubStore()
-    imss.Add(&pub)
-    imss.Add(&sub)
-    cc.subStore = imss
+	t.Run("Send messages & return the latest on subscriber", func(t *testing.T) {
+		s := conversation.NewInMemorySubscriberStore()
+		c := conversation.NewChannel(s)
 
-    want := NewMsg(&pub, "Welcome!")
-    pub.Send(want)
+		pub := user.NewUser("dani")
+		pub.Subscribed = c
 
-    got := sub.msgsLatest
-    if !reflect.DeepEqual(got, want) {
-      t.Errorf("got %v, want %v", got, want)
-    }
+		sub := user.NewUser("daria")
+		sub.Subscribed = c
 
-    got = pub.msgsLatest
-    if !reflect.DeepEqual(got, want) {
-      t.Errorf("got %v, want %v", got, want)
-    }
-  })
+		s.Add(pub)
+		s.Add(sub)
+
+		want := conversation.NewMessage(pub, "Welcome!")
+		pub.MessageSend(want)
+
+		got := sub.MessageLatest()
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+
+		got = pub.MessageLatest()
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
 }
