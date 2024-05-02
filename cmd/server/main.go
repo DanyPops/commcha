@@ -1,55 +1,57 @@
-package main
+package server
 
 import (
-	"encoding/json"
+	"context"
 	"log"
 	"net/http"
-	"strings"
+	"time"
 
-	"github.com/DanyPops/logues/domain/conversation"
-	"github.com/DanyPops/logues/domain/user"
+	"github.com/DanyPops/logues/domain"
 )
 
 type loguesServer struct {
-	channel *conversation.Channel
 	http.Handler
+	channel       *domain.Channel
+	clientConfig  domain.ClientConfig
+	clientManager domain.ClientManager
 }
 
-func NewLoguesServer(c *conversation.Channel) *loguesServer {
-	l := new(loguesServer)
+func (s *loguesServer) webSocket(w http.ResponseWriter, r *http.Request) {
+	s.clientManager.ServeClient(w, r, s.channel)
+}
 
+func (s *loguesServer) userAuthenticator(w http.ResponseWriter, r *http.Request) {
+  // TODO - Check for User in User Store 
+  u := domain.NewUser("dani")
+
+  // Handle error
+  _ = s.clientManager.Authentication.RequestToken(w, u)
+
+	return
+}
+
+func (s *loguesServer) userRegister(w http.ResponseWriter, r *http.Request) {}
+
+func NewServer(ctx context.Context, c *domain.Channel, conf domain.ClientConfig) *loguesServer {
+	l := new(loguesServer)
 	l.channel = c
+  l.clientManager = *domain.NewClientManager(ctx, conf, time.Second * 5)
 
 	m := http.NewServeMux()
-	m.HandleFunc("GET /subscribers", l.ChannelSubscribersList)
-	m.HandleFunc("POST /subscribers/{id}", l.ChannelSubscribersAdd)
-	m.HandleFunc("GET /messages/latest", l.ChannelMessagesLatest)
-
+	m.HandleFunc("/ws", l.webSocket)
+	m.HandleFunc("POST /auth", l.userAuthenticator)
 	l.Handler = m
+
+	l.clientConfig = conf
 
 	return l
 }
 
-func (cs *loguesServer) ChannelSubscribersList(w http.ResponseWriter, r *http.Request) {
-	users := cs.channel.SubscribersList()
-
-	json.NewEncoder(w).Encode(users)
-	w.WriteHeader(http.StatusOK)
-}
-
-func (cs *loguesServer) ChannelSubscribersAdd(w http.ResponseWriter, r *http.Request) {
-	s := strings.TrimPrefix(r.URL.Path, "/subscribers/")
-	u := user.NewUser(s)
-	cs.channel.SubscribersAdd(u)
-}
-
-func (cs *loguesServer) ChannelMessagesLatest(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(*cs.channel.MessagesLatest())
-	w.WriteHeader(http.StatusOK)
-}
-
 func main() {
-  s := conversation.NewInMemorySubscriberStore()
-	l := NewLoguesServer(conversation.NewChannel(s))
+  ctx := context.Background()
+	c := domain.NewChannel()
+	go c.Start()
+	conf := domain.NewClientConfig()
+	l := NewServer(ctx ,c, conf)
 	log.Fatal(http.ListenAndServe(":5000", l))
 }

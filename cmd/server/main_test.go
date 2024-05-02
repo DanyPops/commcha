@@ -1,92 +1,66 @@
-package main
+package server
 
 import (
-	// "encoding/json"
-	"fmt"
-	"net/http"
-	// "net/http/httptest"
-	"reflect"
+	"encoding/json"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
+  "context"
 
-	"github.com/DanyPops/logues/domain/conversation"
-	"github.com/DanyPops/logues/domain/user"
+	"github.com/DanyPops/logues/domain"
+	"github.com/gorilla/websocket"
 )
 
-func assertResponseBody(t testing.TB, got, want string) {
-	t.Helper()
-	if got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
+func TestUserNoAuthClientSendMessage(t *testing.T) {
+	t.Run("Send message via unautenticated user", func(t *testing.T) {
+  })
 }
+func TestUserAuthClientSendMessage(t *testing.T) {
+	t.Run("Send message via authenticated user", func(t *testing.T) {
+    ctx := context.Background()
+		c := domain.NewChannel()
+    cc := domain.NewClientConfig().
+      SetShortDeadline()
 
-// func newGetChanSubsListRequest() *http.Request {
-// 	req, _ := http.NewRequest(http.MethodGet, "/subscribers", nil)
-// 	return req
-// }
+		go c.Start()
+		l := NewServer(ctx, c, cc)
+		server := httptest.NewServer(l)
+		defer server.Close()
 
-func newPostChanSubsAddRequest(name string) *http.Request {
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/subscribers/%s", name), nil)
-	return req
-}
+    authURL := server.URL + "/auth"
+    req := httptest.NewRequest("POST", authURL, nil)
+    resp := httptest.NewRecorder()
+    l.userAuthenticator(resp, req)
+    otp := struct{
+      OTP string `json:"otp"`
+    }{}
+    _ = json.NewDecoder(resp.Body).Decode(&otp)
 
-// func TestAddListSubscribers(t *testing.T) {
-// 	t.Run("Add subscribers & returns the subscribers", func(t *testing.T) {
-// 		s := conversation.NewInMemorySubscriberStore()
-// 		c := conversation.NewChannel(s)
-// 		l := NewLoguesServer(c)
-//
-// 		res := httptest.NewRecorder()
-//
-//     uDani := user.NewUser("dani")
-//     uAviv := user.NewUser("aviv")
-// 		req := newPostChanSubsAddRequest(uDani)
-// 		l.ChannelSubscribersAdd(res, req)
-// 		req = newPostChanSubsAddRequest(uAviv)
-// 		l.ChannelSubscribersAdd(res, req)
-//
-// 		req = newGetChanSubsListRequest()
-// 		l.ChannelSubscribersList(res, req)
-//
-// 		want := []*user.User{uDani, uAviv}
-// 		got := []*user.User{}
-//
-// 		err := json.NewDecoder(res.Body).Decode(&got)
-//
-// 		if err != nil {
-// 			t.Fatalf("Failed to decode response %q to users: %v", res.Body, err)
-// 		}
-//
-// 		if !reflect.DeepEqual(got, want) {
-// 			t.Errorf("got %v, want %v", got, want)
-// 		}
-// 	})
-// }
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?otp=" + otp.OTP
+		ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		if err != nil {
+			t.Fatalf("could not open a ws connection on %s: %v", wsURL, err)
+		}
+		defer ws.Close()
 
-func TestUserSendMsg(t *testing.T) {
-	t.Run("Send messages & return the latest on subscriber", func(t *testing.T) {
-		s := conversation.NewInMemorySubscriberStore()
-		c := conversation.NewChannel(s)
-
-		pub := user.NewUser("dani")
-		pub.Subscribed = c
-
-		sub := user.NewUser("daria")
-		sub.Subscribed = c
-
-		s.Add(pub)
-		s.Add(sub)
-
-		want := conversation.NewMessage(pub, "Welcome!")
-		pub.MessageSend(want)
-
-		got := sub.MessageLatest()
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("got %v, want %v", got, want)
+		msg := &domain.Message{
+			Content: "Hello!",
+		}
+		if err := ws.WriteJSON(msg); err != nil {
+			t.Fatalf("couldn't send JSON over WebSocket: %v", err)
 		}
 
-		got = pub.MessageLatest()
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("got %v, want %v", got, want)
+		time.Sleep(10 * time.Millisecond)
+
+		got := &domain.Message{}
+		if err := ws.ReadJSON(got); err != nil {
+			t.Fatalf("couldn't read JSON over WebSocket: %v", err)
+		}
+
+		want := "dani: Hello!"
+		if got.String() != want {
+			t.Errorf("Got %s, want %s", got, want)
 		}
 	})
 }
