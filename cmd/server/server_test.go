@@ -105,7 +105,7 @@ func (c *loguesClient) LastMessage() message.Message {
 
 func TestServer(t *testing.T) {
 	t.Run("Authenticate user & send message", func(t *testing.T) {
-		srv := httptest.NewServer(NewServer())
+		srv := httptest.NewServer(New())
 		defer srv.Close()
 
 		name := "dpop"

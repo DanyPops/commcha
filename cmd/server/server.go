@@ -20,7 +20,7 @@ type Server struct {
 	channel            *channel.Channel
 }
 
-func NewServer() *Server {
+func New() *Server {
 	l := new(Server)
 	l.clientServer = client.NewClientServer()
 	l.authenticator = auth.Authenticator{
@@ -32,14 +32,24 @@ func NewServer() *Server {
   go l.channel.Start()
 
 	m := http.NewServeMux()
+	m.HandleFunc("GET /", l.homeHandler)
 	m.HandleFunc("POST /auth", l.authHandler)
-	m.HandleFunc("/ws", l.wsHandler)
+	m.HandleFunc("GET /ws", l.wsHandler)
 	l.Handler = m
 
 	return l
 }
 
-func (s *Server) registrationHandler(w http.ResponseWriter, r *http.Request) {}
+func (s *Server) Serve() error {
+  slog.Info("starting logues")
+  return http.ListenAndServe(":7331", s.Handler)
+}
+
+func (s *Server) homeHandler(w http.ResponseWriter, r *http.Request) {
+  http.ServeFile(w, r, "./../../home.html")
+}
+
+// func (s *Server) registrationHandler(w http.ResponseWriter, r *http.Request) {}
 
 func (s *Server) authHandler(w http.ResponseWriter, r *http.Request) {
 	var cred auth.Credentials
@@ -50,7 +60,8 @@ func (s *Server) authHandler(w http.ResponseWriter, r *http.Request) {
 		slog.Error("authentication failed: %s", err)
 		return
 	}
-
+  
+  slog.Info("requesting token for user","user", user)
 	token, err := s.authenticator.NewToken(user)
 	if err != nil {
 		slog.Error("token generation failed: %s", err)
@@ -89,9 +100,11 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	s.clientServer.ServeClient(conn, user, s.channel)
 }
 
-// func main() {
-//   ctx := context.Background()
-// 	conf := domain.NewClientConfig()
-// 	l := NewServer(ctx, conf)
-// 	log.Fatal(http.ListenAndServe(":5000", l))
-// }
+func main() {
+  // ctx := context.Background()
+	l := New()
+  if err := l.Serve(); err != nil {
+    slog.Error("failed to start server", err)
+  }
+	// http.ListenAndServe(":5000", l))
+}

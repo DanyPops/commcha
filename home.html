@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Chat Example</title>
+<script type="text/javascript">
+
+window.onload = function () {
+  if (!window["WebSocket"]) {
+    var item = document.createElement("div");
+    item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
+    appendLog(item);
+  };
+
+  var conn;
+  var msg = document.getElementById("msg");
+  var log = document.getElementById("log");
+  var username = document.getElementById("username");
+  var password = document.getElementById("password");
+
+  function appendLog(item) {
+      var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
+      log.appendChild(item);
+      if (doScroll) {
+          log.scrollTop = log.scrollHeight - log.clientHeight;
+      }
+  };
+
+  document.forms["login"].addEventListener('submit', (event) => {
+    event.preventDefault();
+    fetch(event.target.action, {
+      method: "POST",
+      body: JSON.stringify({
+        username: username.value,
+        password: password.value
+      }),
+      headers: {
+        "Content-type": "application/json"
+      }
+    }).then((response) => {
+        if (!response.ok) {
+          throw new Error(`http error status: ${response.status}`);
+        }
+        return response.json()})
+      .then((json) => {
+        var token = json["key"];
+        conn = new WebSocket("ws://" + document.location.host + "/ws?otp=" + token);
+        conn.onclose = (e) => {
+            var item = document.createElement("div");
+            item.innerHTML = "<b>Connection closed.</b>";
+            appendLog(item);
+        };
+        conn.onmessage = (e) => {
+          console.log(e)
+          var json = JSON.parse(e.data)
+          // var messages = e.data.split('\n');
+          // for (var i = 0; i < messages.length; i++) {
+          var item = document.createElement("div");
+              // item.innerText = messages[i];
+          item.innerText = `${json.user.name}:${json.content}`;
+          appendLog(item);
+          // }
+        };
+      });
+  });
+
+  document.getElementById("send").onsubmit = function () {
+      if (!conn) {
+          return false;
+      }
+      if (!msg.value) {
+          return false;
+      }
+      // conn.send(JSON.stringify(msg.value));
+    var json = `{"content": "${msg.value}"}`
+      conn.send(json);
+      msg.value = "";
+      return false;
+  };
+
+};
+</script>
+<style type="text/css">
+html {
+  overflow: hidden;
+}
+
+body {
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: gray;
+}
+
+#log {
+  background: white;
+  margin: 0;
+  padding: 0.5em 0.5em 0.5em 0.5em;
+  position: absolute;
+  top: 0.5em;
+  left: 0.5em;
+  right: 0.5em;
+  bottom: 3em;
+  overflow: auto;
+}
+
+#send {
+  padding: 0 0.5em 0 0.5em;
+  margin: 0;
+  position: absolute;
+  bottom: 1em;
+  left: 0px;
+  overflow: hidden;
+}
+
+.send-field {
+  size: 33%;
+}
+
+#login {
+  padding: 0 0.5em 0 0.5em;
+  margin: 0;
+  position: absolute;
+  bottom: 1em;
+  right: 0px;
+  overflow: hidden;
+}
+
+.login-field {
+  size: 10%;
+}
+
+</style>
+</head>
+<body>
+<div id="log"></div>
+<form id="send">
+  <input type="submit" value="Send" />
+  <input type="text" id="msg" class="send-field" autofocus />
+</form>
+<form id="login" action="/auth" method="post">
+  <input type="submit" value="Login"/>
+  <input type="username" class="login-field" id="username" autofocus />
+  <input type="password" class="login-field" id="password" autofocus />
+</form>
+</body>
+</html>

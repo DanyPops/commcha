@@ -67,15 +67,15 @@ func NewClient(conn io.ReadWriteCloser, u user.User, ch *channel.Channel) *Clien
 
 func (c *Client) Start() {
 	c.communicationChannel.RegisterReceiver <- c
-	go c.receiverReader()
-	go c.connectionReader()
+	go c.rcvReaderConnWriter()
+	go c.connReaderRcvWriter()
 }
 
 func (c *Client) Stop() {
 	c.stopChannel <- struct{}{}
 }
 
-func (c *Client) receiverReader() {
+func (c *Client) rcvReaderConnWriter() {
 	defer func() {
 		c.receiverTicker.Stop()
 		c.connection.Close()
@@ -85,19 +85,17 @@ func (c *Client) receiverReader() {
 		select {
 		case d, ok := <-c.receiverChannel:
 			if !ok {
-				c.connection.Close()
 				return
 			}
+
 			if _, err := c.connection.Write(d); err != nil {
 				slog.Error("writing to connection:", err)
-				c.connection.Close()
 				return
 			}
 
 		case <-c.receiverTicker.C:
 			if _, err := c.connection.Write([]byte{}); err != nil {
 				slog.Error("writing to connection:", err)
-				c.connection.Close()
 				return
 
 			}
@@ -109,7 +107,7 @@ func (c *Client) receiverReader() {
 	}
 }
 
-func (c *Client) connectionReader() {
+func (c *Client) connReaderRcvWriter() {
 	defer func() {
 		c.communicationChannel.UnregisterReceiver <- c
 		c.connection.Close()
@@ -126,7 +124,7 @@ func (c *Client) connectionReader() {
 			if !websocket.IsCloseError(err, websocket.CloseAbnormalClosure) {
 				slog.Error("reading from connection:", err)
 			}
-
+      slog.Error("decoding error", err)
 			break
 		}
 

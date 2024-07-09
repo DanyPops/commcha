@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -31,7 +32,8 @@ func (a EchoUserAuth) AuthenticateCredentials(creds Credentials) (user.User, err
 }
 
 type Token struct {
-	Key string
+  Key string `json:"key"`
+
 }
 
 type TokenDecoder interface {
@@ -112,7 +114,7 @@ func (rm OTPRetentionMap) NewToken(u user.User) (Token, error) {
 		Created: time.Now(),
 		User:    u,
 	}
-
+  slog.Info("created new otp","otp", o)
   rm.lock.Lock()
 	rm.otpMap[key] = o
   rm.lock.Unlock()
