@@ -1,7 +1,9 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -10,6 +12,11 @@ import (
 	"github.com/DanyPops/logues/domain/channel"
 	"github.com/DanyPops/logues/domain/client"
 	"github.com/DanyPops/logues/domain/connection"
+)
+
+var (
+  //go:embed "main.html"
+  mainHtml embed.FS
 )
 
 type Server struct {
@@ -40,13 +47,19 @@ func New() *Server {
 	return l
 }
 
-func (s *Server) Serve() error {
-  slog.Info("starting logues")
-  return http.ListenAndServe(":7331", s.Handler)
+func (s *Server) Serve(port string) error {
+  slog.Info("starting logues", "port", port)
+  return http.ListenAndServe(fmt.Sprintf(":%s", port), s.Handler)
 }
 
 func (s *Server) homeHandler(w http.ResponseWriter, r *http.Request) {
-  http.ServeFile(w, r, "./../../home.html")
+  b, err := mainHtml.ReadFile("main.html")
+  if err != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    slog.Error("failed to read static file", err)
+    return
+  }
+  w.Write(b)
 }
 
 // func (s *Server) registrationHandler(w http.ResponseWriter, r *http.Request) {}
@@ -61,7 +74,6 @@ func (s *Server) authHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
   
-  slog.Info("requesting token for user","user", user)
 	token, err := s.authenticator.NewToken(user)
 	if err != nil {
 		slog.Error("token generation failed: %s", err)
@@ -72,8 +84,6 @@ func (s *Server) authHandler(w http.ResponseWriter, r *http.Request) {
 		slog.Error("token encoding failed: %s", err)
 		return
 	}
-  
-	return
 }
 
 func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -101,10 +111,9 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-  // ctx := context.Background()
 	l := New()
-  if err := l.Serve(); err != nil {
+  p := "7331"
+  if err := l.Serve(p); err != nil {
     slog.Error("failed to start server", err)
   }
-	// http.ListenAndServe(":5000", l))
 }

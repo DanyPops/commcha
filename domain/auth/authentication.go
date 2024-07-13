@@ -114,7 +114,7 @@ func (rm OTPRetentionMap) NewToken(u user.User) (Token, error) {
 		Created: time.Now(),
 		User:    u,
 	}
-  slog.Info("created new otp","otp", o)
+  slog.Debug("created new otp","otp", o)
   rm.lock.Lock()
 	rm.otpMap[key] = o
   rm.lock.Unlock()

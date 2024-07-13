@@ -70,7 +70,7 @@ func getOTP(url string, creds auth.Credentials) (string, error) {
 
 func (c *loguesClient) Start() {
 	for {
-    // TODO - MSG R
+		// TODO - MSG R
 		msg := message.Message{}
 
 		if err := json.NewDecoder(c.connection).Decode(&msg); err != nil {
@@ -86,7 +86,7 @@ func (c *loguesClient) Start() {
 		}
 
 		c.msgLog = append(c.msgLog, msg)
-    // ODOT
+		// ODOT
 		c.wg.Done()
 	}
 }
@@ -104,10 +104,30 @@ func (c *loguesClient) LastMessage() message.Message {
 }
 
 func TestServer(t *testing.T) {
-	t.Run("Authenticate user & send message", func(t *testing.T) {
-		srv := httptest.NewServer(New())
-		defer srv.Close()
+	srv := httptest.NewServer(New())
+	defer srv.Close()
 
+	t.Run("verify static pages", func(t *testing.T) {
+		resp, err := http.Get(srv.URL)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		func(t *testing.T, got, want int) {
+			if got != want {
+				t.Errorf("got status code %d, want %d", got, want)
+			}
+		}(t, resp.StatusCode, http.StatusOK)
+
+		func(t *testing.T, got string) {
+      want := "text/html; charset=utf-8"
+			if got != want {
+				t.Errorf("got %s, want %s", got, want)
+			}
+		}(t, resp.Header.Get("Content-Type"))
+	})
+	t.Run("authenticate user & send message", func(t *testing.T) {
 		name := "dpop"
 		creds := auth.Credentials{
 			Username: name,
@@ -125,13 +145,13 @@ func TestServer(t *testing.T) {
 				t.Fatal(err)
 			}
 			clis[i] = c
-      c.wg.Add(1)
+			c.wg.Add(1)
 		}
 
 		clis[0].SendMessage(content)
 
 		for _, c := range clis {
-      c.wg.Wait()
+			c.wg.Wait()
 			got := c.LastMessage()
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("got %s, want %s", got, want)

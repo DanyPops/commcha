@@ -1,0 +1,19 @@
+FROM docker.io/library/golang:1.22.3-alpine3.20 as builder
+
+RUN apk add --update make \
+  && rm -rf /tmp/* \
+  && rm -rf /var/cache/apk/*
+
+RUN mkdir /build
+WORKDIR /build
+
+COPY . .
+RUN ls -la
+
+RUN GOOS=linux GOARCH=amd64 make build
+
+FROM docker.io/library/alpine:3.20
+
+COPY --from=builder /build/dist/logues /logues/logues
+
+ENTRYPOINT ["/logues/logues"]
